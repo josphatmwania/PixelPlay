@@ -1127,15 +1127,37 @@ private fun CenterPlayButton(
             val pathMeasure = PathMeasure().apply {
                 setPath(ringPath, forceClosed = true)
             }
-            val progressLength = pathMeasure.length * ringProgress
-            if (progressLength > 0f) {
+            val pathLength = pathMeasure.length
+            val progressLength = pathLength * ringProgress
+            if (progressLength > 0f && pathLength > 0f) {
+                val normalizedRotation = ((animatedRotation % 360f) + 360f) % 360f
+                val startDistance = (pathLength * (normalizedRotation / 360f)).coerceIn(0f, pathLength)
+                val boundedProgress = progressLength.coerceAtMost(pathLength)
                 val progressPath = Path()
-                pathMeasure.getSegment(
-                    startDistance = 0f,
-                    stopDistance = progressLength,
-                    destination = progressPath,
-                    startWithMoveTo = true,
-                )
+
+                if (startDistance + boundedProgress <= pathLength) {
+                    pathMeasure.getSegment(
+                        startDistance = startDistance,
+                        stopDistance = startDistance + boundedProgress,
+                        destination = progressPath,
+                        startWithMoveTo = true,
+                    )
+                } else {
+                    val firstLeg = pathLength - startDistance
+                    pathMeasure.getSegment(
+                        startDistance = startDistance,
+                        stopDistance = pathLength,
+                        destination = progressPath,
+                        startWithMoveTo = true,
+                    )
+                    pathMeasure.getSegment(
+                        startDistance = 0f,
+                        stopDistance = (boundedProgress - firstLeg).coerceAtLeast(0f),
+                        destination = progressPath,
+                        startWithMoveTo = false,
+                    )
+                }
+
                 drawPath(
                     path = progressPath,
                     color = palette.controlContainer.copy(alpha = if (enabled) 1f else 0.95f),
