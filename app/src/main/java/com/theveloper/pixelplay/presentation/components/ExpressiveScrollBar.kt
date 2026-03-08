@@ -2,6 +2,8 @@ package com.theveloper.pixelplay.presentation.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -96,6 +98,8 @@ fun ExpressiveScrollBar(
     var isDragging by remember { mutableStateOf(false) }
     var dragProgress by remember { mutableFloatStateOf(-1f) }
     var pendingScrollIndex by remember { mutableIntStateOf(-1) }
+    val displayedProgress = remember { Animatable(0f) }
+    var hasSyncedDisplayedProgress by remember { mutableStateOf(false) }
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val surfaceVariantColor = MaterialTheme.colorScheme.secondaryContainer
@@ -139,17 +143,37 @@ fun ExpressiveScrollBar(
 
             if (listState != null) {
                 val layoutInfo = listState.layoutInfo
+                val visibleItems = layoutInfo.visibleItemsInfo
+                val firstVisibleItem = visibleItems.firstOrNull()
+                val lastVisibleItem = visibleItems.lastOrNull()
                 totalItemsCount = layoutInfo.totalItemsCount
-                val itemStridePx = estimateListItemStridePx(layoutInfo.visibleItemsInfo)
+
+                if (firstVisibleItem == null || lastVisibleItem == null) {
+                    return ScrollMetrics(
+                        progress = 0f,
+                        totalItemsCount = totalItemsCount,
+                        maxScrollIndex = 1,
+                        scrollableHeight = 1f
+                    )
+                }
+
+                val itemStridePx = estimateListItemStridePx(visibleItems)
                 val viewportHeightPx =
                     (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).toFloat()
                         .coerceAtLeast(1f)
                 val estimatedVisibleItems = (viewportHeightPx / itemStridePx).coerceAtLeast(1f)
+                val hiddenBeforeFirstPx =
+                    (layoutInfo.viewportStartOffset - firstVisibleItem.offset).coerceAtLeast(0).toFloat()
+                val hiddenAfterLastPx =
+                    ((lastVisibleItem.offset + lastVisibleItem.size) - layoutInfo.viewportEndOffset)
+                        .coerceAtLeast(0)
+                        .toFloat()
 
-                currentScrollPx =
-                    (listState.firstVisibleItemIndex * itemStridePx) + listState.firstVisibleItemScrollOffset
-                totalScrollableContentPx =
-                    ((totalItemsCount * itemStridePx) - viewportHeightPx).coerceAtLeast(1f)
+                currentScrollPx = (firstVisibleItem.index * itemStridePx) + hiddenBeforeFirstPx
+                totalScrollableContentPx = (
+                    currentScrollPx +
+                        (((totalItemsCount - lastVisibleItem.index - 1) * itemStridePx) + hiddenAfterLastPx)
+                    ).coerceAtLeast(1f)
                 approximateMaxScrollIndex =
                     (totalItemsCount - estimatedVisibleItems).toInt().coerceAtLeast(1)
             } else if (gridState != null) {
@@ -234,6 +258,34 @@ fun ExpressiveScrollBar(
                 }
         }
 
+        LaunchedEffect(listState, gridState, constraintsMaxHeight, minHeight, isDragging) {
+            if (isDragging) return@LaunchedEffect
+
+            snapshotFlow { getScrollStats().progress }
+                .distinctUntilChanged()
+                .collectLatest { targetProgress ->
+                    if (!hasSyncedDisplayedProgress) {
+                        displayedProgress.snapTo(targetProgress)
+                        hasSyncedDisplayedProgress = true
+                    } else {
+                        displayedProgress.animateTo(
+                            targetValue = targetProgress,
+                            animationSpec = tween(
+                                durationMillis = 90,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                    }
+                }
+        }
+
+        LaunchedEffect(isDragging, dragProgress) {
+            if (isDragging && dragProgress >= 0f) {
+                displayedProgress.snapTo(dragProgress)
+                hasSyncedDisplayedProgress = true
+            }
+        }
+
         val indicatorPath = remember { Path() }
 
         Box(
@@ -259,18 +311,17 @@ fun ExpressiveScrollBar(
                             isDragging = true
 
                             val stats = getScrollStats()
-                            val realProgress = stats.progress
                             val scrollableHeight = stats.scrollableHeight
                             val handleHeightPx = with(density) { minHeight.toPx() }
 
-                            val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else realProgress
-                            val handleY = displayProgress * scrollableHeight
+                            val visualProgress = displayedProgress.value
+                            val handleY = visualProgress * scrollableHeight
 
                             val isTouchOnHandle = offset.y >= handleY && offset.y <= (handleY + handleHeightPx)
 
                             if (isTouchOnHandle) {
                                 grabOffset = offset.y - handleY
-                                dragProgress = realProgress
+                                dragProgress = visualProgress
                             } else {
                                 grabOffset = handleHeightPx / 2f
                                 updateProgressFromTouch(offset.y, grabOffset)
@@ -298,10 +349,10 @@ fun ExpressiveScrollBar(
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val stats = getScrollStats()
-                val realProgress = stats.progress
                 val scrollableHeight = stats.scrollableHeight
 
-                val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else realProgress
+                val visualProgress = displayedProgress.value
+                val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else visualProgress
                 val handleY = displayProgress * scrollableHeight
                 val handleHeightPx = minHeight.toPx()
 
@@ -359,9 +410,9 @@ fun ExpressiveScrollBar(
                    modifier = Modifier
                        .offset {
                            val stats = getScrollStats()
-                           val realProgress = stats.progress
                            val scrollableHeight = stats.scrollableHeight
-                           val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else realProgress
+                           val visualProgress = displayedProgress.value
+                           val displayProgress = if (isDragging && dragProgress >= 0f) dragProgress else visualProgress
                            val handleY = displayProgress * scrollableHeight
                            val handleHeightPx = with(density) { minHeight.toPx() }
                            
