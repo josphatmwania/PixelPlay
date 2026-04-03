@@ -35,6 +35,14 @@ object MediaItemBuilder {
         "3gpp",
         "alac",
     )
+    private val EXTRACTOR_FIRST_MIME_TYPES = setOf(
+        "audio/mp4",
+        "audio/m4a",
+        "audio/x-m4a",
+        "audio/mp4a-latm",
+        "audio/alac",
+        "audio/x-alac",
+    )
     private val SUPPORTED_INTERNAL_ARTWORK_SCHEMES = setOf(
         LocalArtworkUri.SCHEME,
         "content",
@@ -68,7 +76,7 @@ object MediaItemBuilder {
         return MediaItem.Builder()
             .setMediaId(song.id)
             .setUri(playbackUri(song))
-            .setMimeType(song.mimeType)
+            .setMimeType(playbackMimeType(song))
             .setMediaMetadata(buildMediaMetadataForSong(song))
             .build()
     }
@@ -77,7 +85,7 @@ object MediaItemBuilder {
         return MediaItem.Builder()
             .setMediaId(song.id)
             .setUri(playbackUri(song))
-            .setMimeType(song.mimeType)
+            .setMimeType(playbackMimeType(song))
             .setMediaMetadata(
                 buildMediaMetadataForSong(
                     song = song,
@@ -88,6 +96,12 @@ object MediaItemBuilder {
     }
 
     fun playbackUri(song: Song): Uri = playbackUri(
+        contentUriString = song.contentUriString,
+        filePath = song.path,
+        mimeType = song.mimeType
+    )
+
+    internal fun playbackMimeType(song: Song): String? = playbackMimeType(
         contentUriString = song.contentUriString,
         filePath = song.path,
         mimeType = song.mimeType
@@ -107,6 +121,37 @@ object MediaItemBuilder {
             Uri.fromFile(File(contentUriString))
         } else {
             uri
+        }
+    }
+
+    internal fun playbackMimeType(
+        contentUriString: String,
+        filePath: String?,
+        mimeType: String?
+    ): String? {
+        val normalizedMimeType = mimeType?.trim()?.lowercase()
+        if (normalizedMimeType.isNullOrBlank()) {
+            return null
+        }
+
+        val isLikelyLocalMedia = LocalArtworkUri.isLikelyLocalMedia(contentUriString) ||
+            filePath?.startsWith("/") == true
+        if (!isLikelyLocalMedia) {
+            return mimeType
+        }
+
+        val extension = filePath
+            ?.substringAfterLast('.', "")
+            ?.lowercase()
+            .orEmpty()
+
+        return if (
+            normalizedMimeType in EXTRACTOR_FIRST_MIME_TYPES ||
+            extension in DIRECT_FILE_URI_EXTENSIONS
+        ) {
+            null
+        } else {
+            mimeType
         }
     }
 

@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
@@ -40,6 +41,7 @@ import com.theveloper.pixelplay.data.telegram.TelegramRepository
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import android.net.Uri
 import java.io.File
@@ -271,6 +273,23 @@ class DualPlayerEngine @Inject constructor(
     }
 
     private fun buildPlayer(handleAudioFocus: Boolean): ExoPlayer {
+        val mediaCodecSelector = MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+            val decoderInfos = MediaCodecSelector.DEFAULT.getDecoderInfos(
+                mimeType,
+                requiresSecureDecoder,
+                requiresTunnelingDecoder
+            )
+
+            // Some devices advertise ALAC decoders that stall on high-bitrate M4A files.
+            // Prefer stable software codecs when available, otherwise let the FFmpeg
+            // extension renderer handle ALAC by hiding the platform candidates.
+            if (mimeType.equals(MimeTypes.AUDIO_ALAC, ignoreCase = true)) {
+                val softwareDecoders = decoderInfos.filterNot { it.hardwareAccelerated }
+                softwareDecoders.ifEmpty { emptyList() }
+            } else {
+                decoderInfos
+            }
+        }
         val renderersFactory = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(
                 context: Context,
@@ -292,6 +311,8 @@ class DualPlayerEngine @Inject constructor(
                     .build()
             }
         }.setEnableAudioFloatOutput(false) // Disable Float output helper
+         .setMediaCodecSelector(mediaCodecSelector)
+         .setEnableDecoderFallback(true)
          .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 
         val audioAttributes = AudioAttributes.Builder()
