@@ -21,7 +21,6 @@ import com.theveloper.pixelplay.data.model.TransitionSettings
 import com.theveloper.pixelplay.utils.envelope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -315,26 +314,13 @@ class DualPlayerEngine @Inject constructor(
                         return dataSpec.buildUpon().setUri(resolved).build()
                     }
                     
-                    // Cache miss — URI was not pre-resolved.
-                    // Instead of just logging a warning, we perform a synchronous resolution inside runBlocking.
-                    // This ensures the data source gets a valid URI, which fixes the "loop of death" or loading hang.
-                    // P1-2: Timeout of 3s to prevent indefinitely blocking the ExoPlayer playback thread.
-                    Timber.tag("DualPlayerEngine").w("resolveDataSpec: cache MISS for $originalUri — performing synchronous resolution")
-                    try {
-                        val resolvedUri = runBlocking(Dispatchers.IO) {
-                            kotlinx.coroutines.withTimeout(3000L) {
-                                resolveCloudUri(uri)
+                    Timber.tag("DualPlayerEngine").w("resolveDataSpec: cache MISS for %s — scheduling async pre-resolution", originalUri)
+                    scope.launch(Dispatchers.IO) {
+                        runCatching { resolveCloudUri(uri) }
+                            .onFailure { error ->
+                                Timber.tag("DualPlayerEngine").e(error, "resolveDataSpec: Async resolution failed for %s", originalUri)
                             }
-                        }
-                        if (resolvedUri != uri) {
-                            Timber.tag("DualPlayerEngine").i("resolveDataSpec: Synchronous resolution successful for $originalUri")
-                            return dataSpec.buildUpon().setUri(resolvedUri).build()
-                        }
-                    } catch (e: Exception) {
-                        Timber.tag("DualPlayerEngine").e(e, "resolveDataSpec: Synchronous resolution failed for $originalUri")
                     }
-                    
-                    Timber.tag("DualPlayerEngine").w("resolveDataSpec: cache MISS for $originalUri — playback may fail")
                 }
                 return dataSpec
             }
