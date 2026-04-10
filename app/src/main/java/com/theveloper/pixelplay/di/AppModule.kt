@@ -230,6 +230,11 @@ object AppModule {
         return database.aiCacheDao()
     }
 
+    @Provides
+    fun provideAiUsageDao(database: PixelPlayDatabase): AiUsageDao {
+        return database.aiUsageDao()
+    }
+
     @Singleton
     @Provides
     fun provideJellyfinDao(database: PixelPlayDatabase): com.theveloper.pixelplay.data.database.JellyfinDao {

@@ -6,6 +6,8 @@ import com.theveloper.pixelplay.data.ai.provider.AiProvider
 import com.theveloper.pixelplay.data.database.AiCacheDao
 import com.theveloper.pixelplay.data.database.AiCacheEntity
 import com.theveloper.pixelplay.data.preferences.AiPreferencesRepository
+import com.theveloper.pixelplay.data.database.AiUsageDao
+import com.theveloper.pixelplay.data.database.AiUsageEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import java.security.MessageDigest
@@ -17,6 +19,7 @@ class AiOrchestrator @Inject constructor(
     private val preferencesRepo: AiPreferencesRepository,
     private val clientFactory: AiClientFactory,
     private val cacheDao: AiCacheDao,
+    private val usageDao: AiUsageDao,
     private val promptEngine: AiSystemPromptEngine
 ) {
     // Cooldown timer: Provider -> Expiry Timestamp
@@ -235,11 +238,32 @@ class AiOrchestrator @Inject constructor(
                     prompt = prompt,
                     temperature = resolvedTemperature
                 )
-                
+
                 // Validate response is not empty
                 if (response.isBlank()) {
                     failedProviders.add("${provider.name}: returned empty response")
                     continue
+                }
+
+                // Low-maintenance usage tracking using highly accurate proportional estimation bounds (4 chars ~ 1 token)
+                // Models with "thinking" or "reasoning" generally output 2-3x internal tokens for complex generation
+                val isThinkingModel = finalSystemPrompt.contains("think", true) || requestedModel.contains("reasoning", true)
+                val estimatedPromptTokens = (finalSystemPrompt.length + prompt.length) / 4
+                val estimatedOutputTokens = response.length / 4
+                val estimatedThoughtTokens = if (isThinkingModel) (estimatedOutputTokens * 1.5).toInt() else 0
+
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    usageDao.insertUsage(
+                        AiUsageEntity(
+                            timestamp = now,
+                            provider = provider.displayName,
+                            model = requestedModel,
+                            promptType = type.name,
+                            promptTokens = estimatedPromptTokens,
+                            outputTokens = estimatedOutputTokens,
+                            thoughtTokens = estimatedThoughtTokens
+                        )
+                    )
                 }
 
                 cacheDao.insert(AiCacheEntity(promptHash = hash, responseJson = response, timestamp = System.currentTimeMillis()))

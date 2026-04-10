@@ -17,7 +17,8 @@ import com.theveloper.pixelplay.data.preferences.CarouselStyle
 import com.theveloper.pixelplay.data.preferences.LibraryNavigationMode
 import com.theveloper.pixelplay.data.preferences.ThemePreference
 import com.theveloper.pixelplay.data.preferences.UserPreferencesRepository
-import com.theveloper.pixelplay.data.preferences.AiPreferencesRepository
+import com.theveloper.pixelplay.data.database.AiUsageDao
+import com.theveloper.pixelplay.data.database.AiUsageEntity
 import com.theveloper.pixelplay.data.preferences.AlbumArtQuality
 import com.theveloper.pixelplay.data.preferences.AlbumArtColorAccuracy
 import com.theveloper.pixelplay.data.preferences.AlbumArtPaletteStyle
@@ -166,6 +167,7 @@ class SettingsViewModel @Inject constructor(
     private val colorSchemeProcessor: ColorSchemeProcessor,
     private val syncManager: SyncManager,
     private val aiClientFactory: AiClientFactory,
+    private val aiUsageDao: AiUsageDao,
     private val lyricsRepository: LyricsRepository,
     private val musicRepository: MusicRepository,
     private val backupManager: BackupManager,
@@ -253,6 +255,21 @@ class SettingsViewModel @Inject constructor(
 
     val isSafeTokenLimitEnabled: StateFlow<Boolean> = aiPreferencesRepository.isSafeTokenLimitEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val recentAiUsage: StateFlow<List<AiUsageEntity>> = aiUsageDao.getRecentUsages(20)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val totalPromptTokens: StateFlow<Int> = aiUsageDao.getTotalPromptTokens()
+        .map { it ?: 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalOutputTokens: StateFlow<Int> = aiUsageDao.getTotalOutputTokens()
+        .map { it ?: 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalThoughtTokens: StateFlow<Int> = aiUsageDao.getTotalThoughtTokens()
+        .map { it ?: 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private val fileExplorerStateHolder = FileExplorerStateHolder(userPreferencesRepository, viewModelScope, context)
 
@@ -985,6 +1002,12 @@ class SettingsViewModel @Inject constructor(
             aiPreferencesRepository.setGlmApiKey(apiKey)
             if (apiKey.isNotBlank()) fetchAvailableModels(apiKey, "GLM")
             else clearModelsState("GLM")
+        }
+    }
+
+    fun clearAiUsageData() {
+        viewModelScope.launch {
+            aiUsageDao.clearUsage()
         }
     }
 

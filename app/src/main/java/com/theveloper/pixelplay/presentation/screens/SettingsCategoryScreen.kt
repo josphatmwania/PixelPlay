@@ -1128,6 +1128,69 @@ fun SettingsCategoryScreen(
                                     }
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            SettingsSubsection(title = "AI Usage Report") {
+                                val recentAiUsage by settingsViewModel.recentAiUsage.collectAsState()
+                                val totalPromptTokens by settingsViewModel.totalPromptTokens.collectAsState()
+                                val totalOutputTokens by settingsViewModel.totalOutputTokens.collectAsState()
+                                val totalThoughtTokens by settingsViewModel.totalThoughtTokens.collectAsState()
+
+                                val totalTokens = totalPromptTokens + totalOutputTokens + totalThoughtTokens
+
+                                ActionSettingsItem(
+                                    title = "Total Consumption",
+                                    subtitle = "$totalTokens tokens tracking\nPrompt: $totalPromptTokens | Output: $totalOutputTokens | Thought: $totalThoughtTokens",
+                                    icon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.rounded_monitoring_24),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.tertiary
+                                        )
+                                    },
+                                    primaryActionLabel = "Clear",
+                                    onPrimaryAction = { settingsViewModel.clearAiUsageData() }
+                                )
+
+                                if (recentAiUsage.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    var expanded by remember { mutableStateOf(false) }
+                                    ActionSettingsItem(
+                                        title = "Recent Activity",
+                                        subtitle = "View log of the ${recentAiUsage.size} most recent AI requests.",
+                                        icon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.outline_history_24),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        },
+                                        primaryActionLabel = if (expanded) "Hide" else "View",
+                                        onPrimaryAction = { expanded = !expanded }
+                                    )
+
+                                    if (expanded) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 24.dp, vertical = 8.dp)
+                                        ) {
+                                            recentAiUsage.forEach { usage ->
+                                                val df = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
+                                                val dateStr = df.format(java.util.Date(usage.timestamp))
+                                                val reqTokens = usage.promptTokens + usage.outputTokens + usage.thoughtTokens
+                                                Text(
+                                                    text = "● $dateStr\n  [${usage.provider}] ${usage.model}\n  -> ${usage.promptType}: $reqTokens tokens",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(bottom = 8.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                         SettingsCategory.BACKUP_RESTORE -> {
                             if (!uiState.backupInfoDismissed) {

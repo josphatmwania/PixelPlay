@@ -161,9 +161,9 @@ class GeminiModelService @Inject constructor(
     private fun getDefaultModels(): List<GeminiModel> {
         // Fallback models if API call fails — prioritize latest 3.x models
         return listOf(
+            GeminiModel("gemini-3.0-flash", "Gemini 3.0 Flash"),
             GeminiModel("gemini-3.5-flash", "Gemini 3.5 Flash"),
             GeminiModel("gemini-3.5-pro", "Gemini 3.5 Pro"),
-            GeminiModel("gemini-3.0-flash", "Gemini 3.0 Flash"),
             GeminiModel("gemini-3.0-pro", "Gemini 3.0 Pro"),
             GeminiModel("gemini-2.5-flash", "Gemini 2.5 Flash"),
             GeminiModel("gemini-2.5-pro", "Gemini 2.5 Pro")
