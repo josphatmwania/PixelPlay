@@ -100,6 +100,7 @@ data class SettingsUiState(
     val collagePattern: CollagePattern = CollagePattern.default,
     val collageAutoRotate: Boolean = false,
     val minSongDuration: Int = 10000,
+    val minTracksPerAlbum: Int = 1,
     val replayGainEnabled: Boolean = false,
     val replayGainUseAlbumGain: Boolean = false,
     val isSafeTokenLimitEnabled: Boolean = true
@@ -643,6 +644,12 @@ class SettingsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            userPreferencesRepository.minTracksPerAlbumFlow.collect { minTracks ->
+                _uiState.update { it.copy(minTracksPerAlbum = minTracks) }
+            }
+        }
+
+        viewModelScope.launch {
             userPreferencesRepository.replayGainEnabledFlow.collect { enabled ->
                 _uiState.update { it.copy(replayGainEnabled = enabled) }
             }
@@ -994,6 +1001,12 @@ class SettingsViewModel @Inject constructor(
             userPreferencesRepository.setMinSongDuration(durationMs)
             // Trigger a library rescan so the change takes effect in the database
             syncManager.fullSync()
+        }
+    }
+
+    fun setMinTracksPerAlbum(minTracks: Int) {
+        viewModelScope.launch {
+            userPreferencesRepository.setMinTracksPerAlbum(minTracks)
         }
     }
 
