@@ -72,7 +72,8 @@
     <string name="setcat_language_spanish">Español</string>
     <string name="setcat_language_french">Francés</string>
     <string name="setcat_language_russian">Ruso</string>
-    <string name="setcat_language_chinese">Chino simplificado</string>
+    <string name="setcat_language_chinese">Chino (simplificado)</string>
+    <string name="setcat_language_indonesian">Indonesio</string>
     <string name="setcat_app_theme_label">Tema de la app</string>
     <string name="setcat_app_theme_desc">Cambia entre claro, oscuro o seguir el sistema.</string>
     <string name="setcat_theme_light">Tema claro</string>
